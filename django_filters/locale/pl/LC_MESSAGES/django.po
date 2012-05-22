@@ -1,0 +1,130 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2012-04-06 11:32+0200\n"
+"PO-Revision-Date: 2012-04-06 11:35+0100\n"
+"Last-Translator: Jarek Miazga <jaroslaw.miazga@gmail.com>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: filters.py:20
+msgid "Exact"
+msgstr "Równe"
+
+#: filters.py:20
+#: filters.py:21
+#: filters.py:23
+msgid "Contains"
+msgstr "Zawiera"
+
+#: filters.py:21
+msgid "Greater than"
+msgstr "Większe"
+
+#: filters.py:22
+msgid "Greater than or equal"
+msgstr "Większe lub równe"
+
+#: filters.py:22
+msgid "Lower than"
+msgstr "Mniejsze"
+
+#: filters.py:23
+msgid "Lower than or equal"
+msgstr "Mniejsze lub równe"
+
+#: filters.py:24
+msgid "Starts with"
+msgstr "Zaczyna się od"
+
+#: filters.py:25
+msgid "Ends with"
+msgstr "Kończy się"
+
+#: filters.py:26
+msgid "Range"
+msgstr "Zakres"
+
+#: filters.py:26
+msgid "Year"
+msgstr "Rok"
+
+#: filters.py:26
+msgid "Month"
+msgstr "Miesiąc"
+
+#: filters.py:27
+msgid "Day"
+msgstr "Dzień"
+
+#: filters.py:27
+msgid "Week day"
+msgstr "Dzień tygodnia"
+
+#: filters.py:27
+msgid "Is null"
+msgstr "Jest puste"
+
+#: filters.py:28
+msgid "Search"
+msgstr "Szukaj"
+
+#: filters.py:28
+msgid "Regular expression"
+msgstr "Wyrażenie regularne"
+
+#: filters.py:30
+msgid "Different"
+msgstr "Różne"
+
+#: filters.py:30
+#: filters.py:31
+msgid "Not contains"
+msgstr "Nie zawiera"
+
+#: filters.py:31
+msgid "Not starts with"
+msgstr "Nie zaczyna się od"
+
+#: filters.py:32
+msgid "Not ends with"
+msgstr "Nie kończy się na"
+
+#: filters.py:154
+msgid "Any Date"
+msgstr "Dowolna data"
+
+#: filters.py:155
+msgid "Today"
+msgstr "Dzisiaj"
+
+#: filters.py:160
+msgid "Past 7 days"
+msgstr "Ostatnie 7 dni"
+
+#: filters.py:164
+msgid "This month"
+msgstr "Bieżący miesiąc"
+
+#: filters.py:168
+msgid "This year"
+msgstr "Bieżący rok"
+
+#: filterset.py:320
+msgid "Select field"
+msgstr "Wybierz pole"
+
+#: widgets.py:49
+msgid "All"
+msgstr "Wszystkie"
+

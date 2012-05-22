@@ -1,18 +1,24 @@
 from copy import deepcopy
+import re
+import json
 
 from django import forms
+from django.forms.forms import BoundField
 from django.db import models
 from django.db.models.fields import FieldDoesNotExist
 from django.db.models.related import RelatedObject
 from django.db.models.sql.constants import LOOKUP_SEP
 from django.utils.datastructures import SortedDict
 from django.utils.text import capfirst
+from django.utils.translation import gettext as _
+from django.utils.safestring import mark_safe
 
 from django_filters.filters import Filter, CharFilter, BooleanFilter, \
     ChoiceFilter, DateFilter, DateTimeFilter, TimeFilter, ModelChoiceFilter, \
-    ModelMultipleChoiceFilter, NumberFilter
+    ModelMultipleChoiceFilter, NumberFilter, RelatedObjectFilter
 
 ORDER_BY_FIELD = 'o'
+ORDER_DIRECTION_FIELD = 'sort_direction';
 
 def get_declared_filters(bases, attrs, with_base_filters=True):
     filters = []
@@ -74,6 +80,13 @@ def filters_for_model(model, fields=None, exclude=None, filter_for_field=None):
             field_dict[f] = filter_
     return field_dict
 
+def init_subfilters(cls):
+    for filter_ in cls.declared_filters.values():
+        if isinstance(filter_, RelatedObjectFilter):
+            field = get_model_field(cls._meta.model, filter_.rel_obj_field)
+            filter_.rel_filter = cls.filter_for_field(field, field.name)
+            filter_.rel_filter.lookup_type = filter_.lookup_type
+ 
 class FilterSetOptions(object):
     def __init__(self, options=None):
         self.model = getattr(options, 'model', None)
@@ -93,23 +106,22 @@ class FilterSetMetaclass(type):
             parents = None
         declared_filters = get_declared_filters(bases, attrs, False)
         new_class = super(FilterSetMetaclass, cls).__new__(cls, name, bases, attrs)
-
         if not parents:
             return new_class
-
+        
         opts = new_class._meta = FilterSetOptions(getattr(new_class, 'Meta', None))
         if opts.model:
             filters = filters_for_model(opts.model, opts.fields, opts.exclude, new_class.filter_for_field)
             filters.update(declared_filters)
         else:
             filters = declared_filters
-
         if None in filters.values():
             raise TypeError("Meta.fields contains a field that isn't defined "
                 "on this FilterSet")
 
         new_class.declared_filters = declared_filters
         new_class.base_filters = filters
+        init_subfilters(new_class)
         return new_class
 
 FILTER_FOR_DBFIELD_DEFAULTS = {
@@ -265,7 +277,7 @@ class BaseFilterSet(object):
         if not hasattr(self, '_ordering_field'):
             self._ordering_field = self.get_ordering_field()
         return self._ordering_field
-
+    
     @classmethod
     def filter_for_field(cls, f, name):
         filter_for_field = dict(FILTER_FOR_DBFIELD_DEFAULTS, **cls.filter_overrides)
@@ -274,12 +286,13 @@ class BaseFilterSet(object):
             'name': name,
             'label': capfirst(f.verbose_name)
         }
-
+        
         if f.choices:
             default['choices'] = f.choices
             return ChoiceFilter(**default)
 
         data = filter_for_field.get(f.__class__)
+        
         if data is None:
             return
         filter_class = data.get('filter_class')
@@ -289,3 +302,112 @@ class BaseFilterSet(object):
 
 class FilterSet(BaseFilterSet):
     __metaclass__ = FilterSetMetaclass
+
+class DynamicFilterSet(FilterSet):
+    
+    def get_filters_as_options(self):
+        fields = {}
+        for name, filter_ in self.filters.iteritems():
+            bf = BoundField(self.form, filter_.field, name)
+            fields[name] = {'label': bf.label, 'label_tag': bf.label_tag(), 'widget': bf.__unicode__(), 'filter': filter_.__class__.__name__}
+        return fields
+        
+    def get_filters_options_json(self):
+        return json.dumps(self.get_filters_as_options())
+    
+    @property
+    def dynamic_form(self):
+        if not hasattr(self, '_dynamic_form'):
+            filter_fields = self.get_filters_as_options()
+            self.get_filters_options_json()
+            FILTER_CHOICES = sorted([('', '--------')]+[(name, field['label']) for name, field in filter_fields.iteritems()], key=lambda a: a[1])
+            fields = [
+                ('select_field', forms.ChoiceField(choices=FILTER_CHOICES, required=False, label=_(u'Select field'))),
+                #~ (ORDER_BY_FIELD, self.ordering_field),
+            ]
+            if self.is_bound:
+                for name, filter_ in self.filters.iteritems():
+                    if name in self._form_fields:
+                        fields.append((name, filter_.field))
+            fields = SortedDict(fields)
+            Form = type('DynamicForm', (forms.Form,), fields)
+            if self.is_bound:
+                self._dynamic_form = Form(self.data, prefix=self.form_prefix)
+                self._dynamic_form.fields.insert(0, 'select_field', self._dynamic_form.fields['select_field'])
+            else:
+                self._dynamic_form = Form(prefix=self.form_prefix)
+        return self._dynamic_form
+    
+    @property
+    def _form_fields(self):
+        if not hasattr(self, '_ff'):
+            self._ff = []
+            for name in filter(lambda k: k.startswith(self.form_prefix), self.data.keys()):
+                name = name.lstrip('%s-' % self.form_prefix)
+                name = re.sub('_[0-9]+$', '', name)
+                if name not in self._ff:
+                    self._ff.append(name)
+        return self._ff
+
+class FilterSetGroup(object):
+    def __init__(self, FilterSet, data, queryset=None):
+        self.data = data or {}
+        self.filtersets = []
+        self.filterset_counter = 1
+        self.queryset = queryset
+        self._qs = None
+        self._qsd = None
+        
+        if self.data:
+            iter_start = self.filterset_counter
+            self.filterset_counter = int(self.data.get('group-total-forms', 1))
+            if self.filterset_counter is None:
+                raise Exception('FilterSet counter is not included in form. Use FilterSetGroup.total_forms in your form.')
+            
+            for i in range(iter_start, self.filterset_counter+1):
+                self.filtersets.append(FilterSet(data=self.data, prefix=str(i), queryset=self.queryset))
+        else:
+            self.filtersets = [FilterSet(prefix=str(self.filterset_counter), queryset=self.queryset)]
+        
+    def __iter__(self):
+        for obj in self.qs:
+            yield obj
+    
+    def get_fields_names(self):
+        return self.filtersets[0].filters.keys()
+            
+    @property
+    def total_forms(self):
+        return mark_safe(u'<input type="hidden" name="group-total-forms" value="%s" id="id_group-total-forms" />' % self.filterset_counter)
+        
+    def forms(self):
+        for filterset in self.filtersets:
+            yield filterset.dynamic_form
+    
+    @property
+    def base_qs(self):
+        if not self._qs:
+            qs = self.filtersets[0]._meta.model._default_manager.none()
+            for filterset in self.filtersets:
+                qs |= filterset.qs
+            if self.data.get(ORDER_BY_FIELD, None):
+                direction = self.data.get(ORDER_DIRECTION_FIELD, "")
+                if direction != "" and direction != '-':
+                    direction = ""
+                orderby_field = self.data.get(ORDER_BY_FIELD)
+                if orderby_field not in self.get_fields_names():
+                    orderby_field = "?"
+                    direction = ""
+                self._qs = qs.order_by(direction + self.data.get(ORDER_BY_FIELD))
+            else:
+                self._qs = qs
+        return self._qs
+    
+    @property
+    def qs(self):
+        if not self._qsd:
+            self._qsd = self.base_qs.distinct()
+        return self._qsd
+        
+    def get_filters_as_options(self):
+        return self.filtersets[0].get_filters_options_json()

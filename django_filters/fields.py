@@ -20,8 +20,8 @@ class RangeField(forms.MultiValueField):
 class LookupTypeField(forms.MultiValueField):
     def __init__(self, field, lookup_choices, *args, **kwargs):
         fields = (
+            forms.ChoiceField(choices=lookup_choices),
             field,
-            forms.ChoiceField(choices=lookup_choices)
         )
         defaults = {
             'widgets': [f.widget for f in fields],

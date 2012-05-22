@@ -1,0 +1,14 @@
+
+#filters {margin-bottom: 30px;}
+#filters #filters-header {position: relative; z-index: 10; text-align: center; text-transform: uppercase; padding: 4px 0;}
+#filters #filters-content {border: solid 1px #999; margin-top: -2px; }
+#filters #filters-footer {text-align: center; }
+#filters #filters-footer .btn {font-weight: bolder;}
+
+#filters fieldset { border-top: dashed 1px #ccc; margin-top: 10px; }
+#filters fieldset:hover { background-color: #F5F5F5; }
+#filters .or { margin: 10px 20px;}
+#filters #filters-content .form-actions {text-align: center;  padding: 10px 20px;}
+#filters #filters-content .form-row {padding: 10px 0; border-bottom: dashed 1px #ccc; margin-bottom: 0;}
+#filters .rm_field {padding: 2px 2px 1px 2px; background-color: #444; cursor: pointer;}
+#filters .rm_field:hover {background-color: #B90000;}

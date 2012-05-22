@@ -11,15 +11,30 @@ __all__ = [
     'Filter', 'CharFilter', 'BooleanFilter', 'ChoiceFilter',
     'MultipleChoiceFilter', 'DateFilter', 'DateTimeFilter', 'TimeFilter',
     'ModelChoiceFilter', 'ModelMultipleChoiceFilter', 'NumberFilter',
-    'RangeFilter', 'DateRangeFilter', 'AllValuesFilter',
+    'RangeFilter', 'DateRangeFilter', 'AllValuesFilter', 'RelatedObjectFilter',
 ]
 
-LOOKUP_TYPES = sorted(QUERY_TERMS.keys())
+LOOKUP_TYPES = (
+    #standard Django lookups
+    ('exact', _(u'Exact')), ('iexact', _(u'Exact')), ('contains', _(u'Contains')), 
+    ('icontains', _(u'Contains')), ('gt', _(u'Greater than')), 
+    ('gte', _(u'Greater than or equal')), ('lt', _(u'Lower than')), 
+    ('lte', _(u'Lower than or equal')), ('in', _(u'Contains')),
+    ('startswith', _(u'Starts with')), ('istartswith', _(u'Starts with')), 
+    ('endswith', _(u'Ends with')), ('iendswith', _(u'Ends with')), 
+    ('range', _(u'Range')), ('year', _(u'Year')), ('month', _(u'Month')), 
+    ('day', _(u'Day')), ('week_day', _(u'Week day')), ('isnull',_(u'Is null')),
+    ('search', _(u'Search')), ('regex', _(u'Regular expression')), ('iregex', _(u'Regular expression')),
+    #additional lookups
+    ('ex_exact', _(u'Different')), ('ex_contains', _(u'Not contains')),
+    ('ex_in', _(u'Not contains')), ('ex_startswith', _(u'Not starts with')),
+    ('ex_endswith', _(u'Not ends with')),
+)
 
 class Filter(object):
     creation_counter = 0
     field_class = forms.Field
-
+    
     def __init__(self, name=None, label=None, widget=None, action=None,
         lookup_type='exact', required=False, **kwargs):
         self.name = name
@@ -39,9 +54,9 @@ class Filter(object):
         if not hasattr(self, '_field'):
             if self.lookup_type is None or isinstance(self.lookup_type, (list, tuple)):
                 if self.lookup_type is None:
-                    lookup = [(x, x) for x in LOOKUP_TYPES]
+                    lookup = LOOKUP_TYPES
                 else:
-                    lookup = [(x, x) for x in LOOKUP_TYPES if x in self.lookup_type]
+                    lookup = filter(lambda l: l[0] in self.lookup_type, LOOKUP_TYPES)
                 self._field = LookupTypeField(self.field_class(
                     required=self.required, widget=self.widget, **self.extra),
                     lookup, required=self.required, label=self.label)
@@ -54,14 +69,17 @@ class Filter(object):
         if not value:
             return qs
         if isinstance(value, (list, tuple)):
-            lookup = str(value[1])
+            lookup = str(value[0])
             if not lookup:
                 lookup = 'exact' # we fallback to exact if no choice for lookup is provided
-            value = value[0]
+            value = value[1]
         else:
             lookup = self.lookup_type
         if value:
-            return qs.filter(**{'%s__%s' % (self.name, lookup): value})
+            if not lookup.startswith('ex_'):
+                return qs.filter(**{'%s__%s' % (self.name, lookup): value})
+            else:
+                return qs.exclude(**{'%s__%s' % (self.name, lookup.replace('ex_', '')): value})
         return qs
 
 class CharFilter(Filter):
@@ -86,14 +104,22 @@ class MultipleChoiceFilter(Filter):
 
     def filter(self, qs, value):
         value = value or ()
-        # TODO: this is a bit of a hack, but ModelChoiceIterator doesn't have a
-        # __len__ method
-        if len(value) == len(list(self.field.choices)):
+        lookup = 'in'
+        if type(self.field) == LookupTypeField and value:
+            lookup, value = value
+        
+        if lookup.startswith('ex_'):
+            filter_type = 'exclude'
+            lookup = lookup.replace('ex_', '')
+        else:
+            filter_type = 'filter'
+
+        if not value:
             return qs
-        q = Q()
-        for v in value:
-            q |= Q(**{self.name: v})
-        return qs.filter(q).distinct()
+        
+        kwargs = {'%s__%s' % (self.name, lookup): value}
+        filter_method = getattr(qs, filter_type)
+        return filter_method(**kwargs)
 
 class DateFilter(Filter):
     field_class = forms.DateField
@@ -153,9 +179,43 @@ class DateRangeFilter(ChoiceFilter):
             value = ''
         return self.options[value][1](qs, self.name)
 
+
 class AllValuesFilter(ChoiceFilter):
     @property
     def field(self):
         qs = self.model._default_manager.distinct().order_by(self.name).values_list(self.name, flat=True)
         self.extra['choices'] = [(o, o) for o in qs]
         return super(AllValuesFilter, self).field
+        
+        
+class RelatedObjectFilter(Filter):
+    
+    def __init__(self, rel_obj_field, **kwargs):
+        self.rel_obj_field = rel_obj_field
+        self.rel_filter = None
+        super(RelatedObjectFilter, self).__init__(**kwargs)
+    
+    @property
+    def field(self):
+        if self.rel_filter is not None:
+            if self.label:
+                self.rel_filter.label = self.label
+            return self.rel_filter.field
+        return super(RelatedObjectFilter, self).field
+        
+    def filter(self, qs, value):
+        if not value:
+            return qs
+        if isinstance(value, (list, tuple)):
+            lookup, value = value
+            if not lookup:
+                lookup = 'exact' # we fallback to exact if no choice for lookup is provided
+        else:
+            lookup = self.lookup_type
+        if value:
+            if not lookup.startswith('ex_'):
+                return qs.filter(**{'%s__%s' % (self.rel_obj_field, lookup): value})
+            else:
+                return qs.exclude(**{'%s__%s' % (self.rel_obj_field, lookup.replace('ex_', '')): value})
+        return qs
+    
