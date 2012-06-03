@@ -23,6 +23,6 @@ class Person(models.Model):
 	groups = models.ManyToManyField(Group)
 	
 	def __unicode__(self):
-		return u"%s %s" % (first_name, last_name)
+		return u"%s %s" % (self.first_name, self.last_name)
 	
 
